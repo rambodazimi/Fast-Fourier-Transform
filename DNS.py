@@ -71,9 +71,20 @@ def __main__ ():
     print(f"ns = {is_ns}")
     print(f"A = {is_A}")
 
-
-
-
+    #from the provided doc 
+    if (is_mx):
+        queryType = "MX"
+        queryNumber = 15
+    elif (is_ns):
+        queryType = "NS"
+        queryNumber = 2
+    else:
+        queryType = "A"
+        queryNumber = 1
+    #sending request to the client
+    print("DnsClient sending request for:", domain_name)
+    print("Server:", ip_address)
+    print("Requesttype:", queryType)
 
 
 
