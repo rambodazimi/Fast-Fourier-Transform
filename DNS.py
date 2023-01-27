@@ -16,6 +16,8 @@ python3 DnsClient [-t timeout] [-r max-retries] [-p port] [-mx|-ns] @server name
 import socket
 import argparse # to run a Python script with multiple arguments with cmd
 import time
+import struct
+import random
 
 # default arguments 
 default_timeOut = 5 # gives how long to wait before retransmitting an unanswered query
@@ -86,10 +88,36 @@ def __main__ ():
     print("Server:", ip_address)
     print("Requesttype:", queryType)
 
-
-
-
-
+def packet_builder(domain_name, queryType):
+    #build request packets 
+    #help from https://stackoverflow.com/questions/24814044/having-trouble-building-a-dns-packet-in-python
+    #>H is used we need big Endian for unsigned short and so we need to reverse the bits 
+    
+    #as suggested randome numbers will be used each time for the ID
+    #ID
+    req_pkt = struct.pack(">H", random.getrandbits(16))
+    #Flag
+    req_pkt += struct.pack(">H", 0x100)
+    #QDCOUNT
+    req_pkt += struct.pack(">H", 0x0001)
+    #ANCOUNT
+    req_pkt += struct.pack(">H", 0x0000)
+    #NSCOUNT
+    req_pkt += struct.pack(">H", 0x0000)
+    #ARCOUNT
+    req_pkt += struct.pack(">H", 0x0000)
+    
+    #parsing the name server
+    for i in domain_name.split("."):
+        req_pkt += struct.pack(">B", len(i))
+        for part in i:
+            req_pkt+= struct.pack("c", part.encode('utf-8'))
+    #QNAME
+    req_pkt += struct.pack(">B", 0x0000)
+    #QTYPE
+    req_pkt += struct.pack(">H", queryType)
+    #QCLASS
+    req_pkt += struct.pack(">H", 0x0001)
 
 
 if __name__ == "__main__":
