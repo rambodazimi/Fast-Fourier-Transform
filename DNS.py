@@ -16,6 +16,7 @@ python3 DnsClient [-t timeout] [-r max-retries] [-p port] [-mx|-ns] @server name
 import socket
 import argparse # to run a Python script with multiple arguments with cmd
 import time
+import random
 
 # default arguments 
 default_timeOut = 5 # gives how long to wait before retransmitting an unanswered query
@@ -55,37 +56,43 @@ def __main__ ():
     timeout = arguments.timeout
     max_retries = arguments.maxretries
     port = arguments.port
-    ip_address = arguments.ip_address
+    ip_address = arguments.ip_address[1:] # to remove the first letter (@) of the ip_address typed by the user
     domain_name = arguments.domain_name
     is_mx = arguments.mx 
     is_ns = arguments.ns
     is_A = (not (is_mx)) and (not (is_ns))
 
-    # just for testing purposes
-    print(f"timeout = {timeout}")
-    print(f"max retries = {max_retries}")
-    print(f"port = {port}")
-    print(f"ip address = {ip_address}")
-    print(f"domain name = {domain_name}")
-    print(f"mx = {is_mx}")
-    print(f"ns = {is_ns}")
-    print(f"A = {is_A}")
-
-    #from the provided doc 
-    if (is_mx):
+    # from the provided doc 
+    if (is_mx): # mail server query
         queryType = "MX"
-        queryNumber = 15
-    elif (is_ns):
+        queryNumber = 15 # 0x000f for a type-MX query
+    elif (is_ns): # name server query
         queryType = "NS"
-        queryNumber = 2
-    else:
+        queryNumber = 2 # 0x0002 for a type-NS query
+    else: # type A or standard query (IP address)
         queryType = "A"
-        queryNumber = 1
-    #sending request to the client
-    print("DnsClient sending request for:", domain_name)
-    print("Server:", ip_address)
-    print("Requesttype:", queryType)
+        queryNumber = 1 # 0x0001 for a type-A query
 
+    # summarize the query to be sent
+    summarize(domain_name, ip_address, queryType)
+
+    # sending request to the client
+    send_request(timeout, max_retries, port, queryNumber, domain_name, ip_address)
+    display_output()
+
+
+def send_request(timeout, max_retries, port, query_number, domain_name, ip_address):
+    pass
+
+
+def display_output():
+    pass
+
+
+def summarize(domain_name, ip_address, queryType):
+    print(f"DnsClient sending request for: {domain_name}")
+    print(f"Server: {ip_address}")
+    print(f"Request type: {queryType}")
 
 
 
