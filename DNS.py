@@ -75,8 +75,8 @@ def __main__ ():
         queryType = "A"
         queryNumber = 1 # 0x0001 for a type-A query
     
-    result = send_request(max_retries,timeout,domain_name,queryType,ip_address,port)
-
+    result = send_requests(max_retries,timeout,domain_name,queryType,ip_address,port)
+    display_output(result,domain_name)
 
 def packet_builder(domain_name, queryType):
     #build request packets 
@@ -108,11 +108,11 @@ def packet_builder(domain_name, queryType):
     req_pkt += struct.pack(">H", queryType)
     #QCLASS
     req_pkt += struct.pack(">H", 0x0001)
-    
+
     return req_pkt
 
 #we will send maximum number of retries to
-def sent_requests(max_retries,timeout, domain_name,queryType,ip_address,port):
+def send_requests(max_retries,timeout, domain_name,queryType,ip_address,port):
     for i in range(max_retries):
         Dns_socket.settimeout(timeout)
         try:
@@ -132,9 +132,29 @@ def sent_requests(max_retries,timeout, domain_name,queryType,ip_address,port):
                 print(f"ERROR   Time Out")
     return response
 
+#same as build packets but unbuild them to be able to decode them later 
+def unbuild_packet(result):
+    #help from https://www.programcreek.com/python/example/3645/struct.unpack_from
+    #the idea is to unpack and increase the offset by 2 since as mentionned in the doc provided 
+    #each value is 2 bytes away
+    # we only need the firs index of the tuple 
 
-def display_output():
-    pass
+    id_unpack = struct.unpack_from(">H",result)[0]
+    flags_unpack = struct.unpack_from(">H",result,2)[0]
+    qdCount_unpack = struct.unpack_from(">H",result,4)[0]
+    anCount_unpack = struct.unpack_from(">H",result,6)[0]
+    anCount_unpack = struct.unpack_from(">H",result,8)[0]
+    anCount_unpack = struct.unpack_from(">H",result,10)[0]
+    
+    list= [id_unpack,flags_unpack,qdCount_unpack,anCount_unpack,anCount_unpack]
+    return list
+    
+def display_output(result,domain_name):
+    anCount = unbuild_packet(result).list[3]
+    if (anCount):
+        print(f"Answer Section ({anCount} records)")
+    else:
+        print(f"NOTFOUND")
 
 
 def summarize(domain_name, ip_address, queryType):
