@@ -22,7 +22,8 @@ import random
 # default arguments 
 default_timeOut = 5 # gives how long to wait before retransmitting an unanswered query
 default_maxRetries = 3 # max number of times to retransmit an uanswered query before giving up 
-default_port = 53 # UPD port number
+default_port = 53 # UDP port number
+Dns_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 def __main__ ():
     parse = argparse.ArgumentParser("This will query a DNS server", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -73,12 +74,15 @@ def __main__ ():
     else: # type A or standard query (IP address)
         queryType = "A"
         queryNumber = 1 # 0x0001 for a type-A query
+    
+    result = send_request(max_retries,timeout,domain_name,queryType,ip_address,port)
+
 
 def packet_builder(domain_name, queryType):
     #build request packets 
     #help from https://stackoverflow.com/questions/24814044/having-trouble-building-a-dns-packet-in-python
     #>H is used we need big Endian for unsigned short and so we need to reverse the bits 
-    
+    # https://docs.python.org/2/library/struct.html#byte-order-size-and-alignment
     #as suggested randome numbers will be used each time for the ID
     #ID
     req_pkt = struct.pack(">H", random.getrandbits(16))
@@ -104,17 +108,29 @@ def packet_builder(domain_name, queryType):
     req_pkt += struct.pack(">H", queryType)
     #QCLASS
     req_pkt += struct.pack(">H", 0x0001)
-    # summarize the query to be sent
     
-    summarize(domain_name, ip_address, queryType)
+    return req_pkt
 
-    # sending request to the client
-    send_request(timeout, max_retries, port, queryNumber, domain_name, ip_address)
-    display_output()
-
-
-def send_request(timeout, max_retries, port, query_number, domain_name, ip_address):
-    pass
+#we will send maximum number of retries to
+def sent_requests(max_retries,timeout, domain_name,queryType,ip_address,port):
+    for i in range(max_retries):
+        Dns_socket.settimeout(timeout)
+        try:
+            #stater the timer and then send the request 
+            start_time = time.time()
+            #send the request 
+            Dns_socket.sendto(packet_builder(domain_name,queryType),(ip_address,port))
+            response, _ = Dns_socket.recvfrom(512)
+            #end time to be able to find the interval
+            end_time = time.time()
+            print(f"Response received after {end_time-start_time} seconds ({i} retries)")
+            break
+        except socket.timeout:
+            if (i == max_retries):
+                print(f"ERROR   Maximum numbere of retries {max_retries} exceeded")
+            else: 
+                print(f"ERROR   Time Out")
+    return response
 
 
 def display_output():
