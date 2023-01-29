@@ -23,6 +23,7 @@ import random
 default_timeOut = 5 # gives how long to wait before retransmitting an unanswered query
 default_maxRetries = 3 # max number of times to retransmit an uanswered query before giving up 
 default_port = 53 # UPD port number
+Dns_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 def __main__ ():
 
@@ -84,9 +85,8 @@ def __main__ ():
     # request_packet = packet_builder(domain_name, queryType, queryNumber)
 
     # send a request to the client after building the DNS packet
-    send_request(timeout, max_retries, port, queryNumber, domain_name, ip_address)
-
-    display_output()
+    result = send_request(max_retries,timeout,domain_name,queryNumber,ip_address,port)
+    display_output(result,domain_name)
 
 def packet_builder(domain_name, queryNumber):
     # build request packets 
@@ -127,7 +127,7 @@ def packet_builder(domain_name, queryNumber):
     req_pkt += struct.pack(">H", 0x0001) # Always 1 representing an Internet address
     return req_pkt
 
-def send_request(timeout, max_retries, port, query_number, domain_name, ip_address):
+def send_request(max_retries,timeout,domain_name,queryNumber,ip_address,port):
     finished = False
     for i in range(max_retries): # try sending request max_retries number of times
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # create a client socket object using IPV4 and UDP protocols
@@ -135,8 +135,8 @@ def send_request(timeout, max_retries, port, query_number, domain_name, ip_addre
         try:
             start_time = time.time()
             # without connecting to any server (TCP), with UDP we can send the request packet to the tuple (ip address, port number)
-            client_socket.sendto(packet_builder(domain_name, query_number), (ip_address, port))
-            (answer, answer_address) = client_socket.recvfrom(1024) # wait until get an reply from the server
+            client_socket.sendto(packet_builder(domain_name, queryNumber), (ip_address, port))
+            answer, _ = client_socket.recvfrom(512) # wait until get an reply from the server
             finished = True
             end_time = time.time()
             time_taken = end_time - start_time # compute the length of time taken to send the request and receive a response from the server
@@ -162,19 +162,169 @@ def unbuild_packet(result):
     flags_unpack = struct.unpack_from(">H",result,2)[0]
     qdCount_unpack = struct.unpack_from(">H",result,4)[0]
     anCount_unpack = struct.unpack_from(">H",result,6)[0]
-    anCount_unpack = struct.unpack_from(">H",result,8)[0]
-    anCount_unpack = struct.unpack_from(">H",result,10)[0]
+    nsCount_unpack = struct.unpack_from(">H",result,8)[0]
+    arCount_unpack = struct.unpack_from(">H",result,10)[0]
     
-    list= [id_unpack,flags_unpack,qdCount_unpack,anCount_unpack,anCount_unpack]
-    return list
+    return id_unpack,flags_unpack,qdCount_unpack,anCount_unpack,nsCount_unpack,arCount_unpack
+    
 
 
-def display_output():
-    anCount = unbuild_packet(result).list[3]
+def display_output(result,domain_name):
+    id,flags,qdCount,anCount,nsCount,arCount = unbuild_packet(result)
     if (anCount):
         print(f"Answer Section ({anCount} records)")
     else:
         print(f"NOTFOUND")
+        exit(1)
+    display_request_error_handler(result)
+    
+    
+    #we need to go through all the query names
+    #add 2 bytes to get the Query type and the Query class
+    #12 is given from the doc for when we are done with the header
+    pointer_position = change_pointer_position(result,12) + 4
+
+    for _ in range(anCount):
+        #this is straight from the provided document
+        pointer_position = change_pointer_position(result,pointer_position)
+        #Byte type 
+        anType = struct.unpack_from(">H", result,pointer_position)[0]
+        #increment the position
+        pointer_position +=4 
+        ttl = struct.unpack_from(">I", result,pointer_position)[0]
+        pointer_position +=4
+        rdLength = struct.unpack_from(">H", result,pointer_position)[0]
+        pointer_position +=2
+
+        #get the answer info and display them 
+        dataValue, pointer_position,typeLetter = get_answer_info(result,pointer_position,anType,rdLength)
+        #if least significant bit of aa is 1 then it's authoritative if not it's nonauthoritative
+        aa = (flags>>10) & 0b1
+        auth = "auth" if aa else "nonauth"
+        if(typeLetter== "MX"):
+            alias = dataValue.split(",")[0]
+            pref = dataValue.split(",")[1]
+            print(f"{typeLetter}    {alias}    {pref}    {ttl}    {auth}")
+        else:
+            print(f"{typeLetter}    {dataValue}    {ttl}    {auth}")
+
+        for _ in range(arCount):
+            # we need to add 10 bytes for type,class,ttl and rdlength and calculate the position again after to skip the rdata 
+            pointer_position = change_pointer_position(result,pointer_position) + 10
+            pointer_position = change_pointer_position(result,pointer_position)
+
+        while (arCount>0) :
+            print(f"***Additional Section ({arCount} records)***")
+            for _ in range(arCount):
+                pointer_position = change_pointer_position(result,pointer_position)
+                anType = struct.unpack_from(">H", result,pointer_position)[0]
+                #increment the position
+                pointer_position +=4 
+                ttl = struct.unpack_from(">I", result,pointer_position)[0]
+                pointer_position +=4
+                rdLength = struct.unpack_from(">H", result,pointer_position)[0]
+                pointer_position +=2
+                #display answer 
+                #we have to call the get_answer_info function again because our values have changed 
+                dataValue, pointer_position,typeLetter = get_answer_info(result,pointer_position,anType,rdLength)
+                if(typeLetter== "MX"):
+                    alias = dataValue.split(",")[0]
+                    pref = dataValue.split(",")[1]
+                    print(f"{typeLetter}    {alias}    {pref}    {ttl}    {auth}")
+                else:
+                    print(f"{typeLetter}    {dataValue}    {ttl}    {auth}")
+    
+        return 0 
+
+
+def display_request_error_handler(result):
+    _,flags = unbuild_packet(result)
+    responseCode = flags & 0b1111
+    message= ""
+   
+    if (responseCode==1):
+        message = "Format error: the name server was not able to interpret the requested query"
+    elif (responseCode==2):
+        message = "Server Failure: the name server was not able to process due to a name server issue"
+    elif (responseCode==3):
+        message = "Name error: the domain name does not exist"
+    elif (responseCode==4):
+        message = "Not Implemented: the request is not supported"
+    elif (responseCode==5):
+        message = "Refused: the name server was refused to do the request"
+    print (message)
+
+# helper function to skip the name fields we don't need
+def change_pointer_position(value,offset):
+    while True:
+        type = struct.unpack_from('>B', value, offset)[0]
+        if (type & 0xC0) == 0xC0:
+            offset += 2
+            return offset
+        if (type & 0xC0) != 0x00:
+            raise Exception("unknown label")
+        offset += 1
+        if type == 0:
+            return offset
+        offset += type
+
+def get_answer_info(result,pointer_position,anType,rdLength):
+
+    dataValue = ""
+    if (anType == 0x0001):
+        requestType= "IP"
+        an_r_data = struct.unpack_from(">"+"B" * rdLength,result,pointer_position)
+        for i in an_r_data:
+            dataValue += str(i) + "."
+        dataValue = dataValue[:-1]
+        pointer_position += rdLength
+    elif (anType == 0x0002):
+        requestType = "NS"
+        an_r_data = decode_label(result, pointer_position)  
+        for i in an_r_data:     
+            dataValue += str(i("utf-8"))  + '.'  
+        dataValue = dataValue[:-1]                          
+        pointer_position += rdLength
+    elif (anType == 0x0005):
+        requestType = "CNAME"
+        an_r_data = decode_label(result, pointer_position)  
+        for i in an_r_data:     
+            dataValue += str(i("utf-8"))  + '.'  
+        dataValue = dataValue[:-1]                          
+        pointer_position += rdLength
+    elif (anType == 0x000f):
+        requestType = "MX"
+        attribute = struct.unpack_from(">H",result,pointer_position)[0]
+        pointer_position += 2
+        an_r_data = decode_label(result, pointer_position)
+        for i in an_r_data:     
+            dataValue += str(i("utf-8"))  + '.'
+        dataValue = dataValue[:-1] 
+        dataValue += "," + str(attribute)                
+        pointer_position += rdLength
+    else:
+        raise Exception("ERROR   unvalid response")
+    
+    return dataValue, requestType, pointer_position
+#very similar to pointer position
+#to decode the bytes to a string 
+def decode_label(result, offset):
+    labelLst = []
+    while True:
+        significantBit = struct.unpack_from(">B", result, offset)[0]
+
+        if (significantBit & 0xC0) == 0xC0:
+            ref = struct.unpack_from(">H", result, offset)
+            offset += 2
+            return (labelLst + decode_label(result, ref & 0x3FFF)), offset
+
+        if (significantBit & 0xC0) != 0x00:
+            exit(1)
+        offset += 1
+        if significantBit == 0:
+            return labelLst
+        labelLst.append(*struct.unpack_from("!%ds" % significantBit, result, offset))
+        offset += significantBit
 
 # summarizes the query that is going to be sent
 def summarize(domain_name, ip_address, queryType):
