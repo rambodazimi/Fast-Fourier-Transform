@@ -80,13 +80,10 @@ def __main__ ():
     # summarize the query to be sent
     summarize(domain_name, ip_address, queryType)
 
-    # build the DNS packet
-    # request_packet = packet_builder(domain_name, queryType, queryNumber)
+    # send a request to the server and save the response from the server
+    response = send_request(timeout, max_retries, port, queryNumber, domain_name, ip_address)
 
-    # send a request to the client after building the DNS packet
-    send_request(timeout, max_retries, port, queryNumber, domain_name, ip_address)
-
-    display_output()
+    display_output(response)
 
 def packet_builder(domain_name, queryNumber):
     # build request packets 
@@ -151,30 +148,59 @@ def send_request(timeout, max_retries, port, query_number, domain_name, ip_addre
     return answer # return the response received from the server
 
 
-#same as build packets but unbuild them to be able to decode them later 
+# same as build packets but unbuild them to be able to decode them later 
 def unbuild_packet(result):
-    #help from https://www.programcreek.com/python/example/3645/struct.unpack_from
-    #the idea is to unpack and increase the offset by 2 since as mentionned in the doc provided 
-    #each value is 2 bytes away
-    # we only need the firs index of the tuple 
-
-    id_unpack = struct.unpack_from(">H",result)[0]
-    flags_unpack = struct.unpack_from(">H",result,2)[0]
-    qdCount_unpack = struct.unpack_from(">H",result,4)[0]
-    anCount_unpack = struct.unpack_from(">H",result,6)[0]
-    anCount_unpack = struct.unpack_from(">H",result,8)[0]
-    anCount_unpack = struct.unpack_from(">H",result,10)[0]
+    # help from https://www.programcreek.com/python/example/3645/struct.unpack_from
+    # the idea is to unpack and increase the offset by 2 as mentionned in the doc provided 
+    # each value is 2 bytes away (so, each time, add with 2)
+    # unpack function returns a tuple which has 2 elements. As the second element is empty, we only need the first. That's why we put [0] at the end
+    id_unpack = struct.unpack_from(">H", result)[0] # ID
+    flags_unpack = struct.unpack_from(">H", result, 2)[0] # Flags (QR, OPCODE, AA, TC, RD, RA, Z, and RCODE)
+    qdCount_unpack = struct.unpack_from(">H", result, 4)[0] # CDCOUNT
+    anCount_unpack = struct.unpack_from(">H", result, 6)[0] # ANCOUNT
+    nsCount_unpack = struct.unpack_from(">H", result, 8)[0] # NSCOUNT
+    arCount_unpack = struct.unpack_from(">H", result, 10)[0] # ARCOUNT
     
-    list= [id_unpack,flags_unpack,qdCount_unpack,anCount_unpack,anCount_unpack]
+    list = [id_unpack, flags_unpack, qdCount_unpack, anCount_unpack, nsCount_unpack, arCount_unpack]
     return list
 
 
-def display_output():
-    anCount = unbuild_packet(result).list[3]
-    if (anCount):
-        print(f"Answer Section ({anCount} records)")
+def display_output(response):
+    unpacked_list = unbuild_packet(response)
+    if (unpacked_list[3] >= 1): # unpacked_list[3] = anCount_unpack (number of resources records in the answer section)
+        print(f"***Answer Section ({unpacked_list[3]} records)***")
     else:
         print(f"NOTFOUND")
+        exit(1)
+    
+
+    # checking the RCODE in the flags
+    RCODE = unpacked_list[1] & 0x000f # and the 16-bit flag with 0000 0000 0000 1111 to get the 4-bit RCODE
+
+    if(RCODE == 1): # RCODE = 1 --> Format error
+        print("ERROR    Format error: the name server was unable to interpret the query")
+        exit(1)
+    elif(RCODE == 2): # RCODE = 2 --> Server failure
+        print("ERROR    Server failure: the name server was unable to process this query due to a problem with the name server")
+        exit(1)
+    elif(RCODE == 3): # RCODE = 3 --> Name error
+        print("NOTFOUND    Name error: meaningful only for responses from an authoritative name server, this code signifies that the domain name referenced in the query does not exist")
+        exit(1)
+    elif(RCODE == 4): # RCODE = 4 --> Not implemented
+        print("ERROR    Not implemented: the name server does not support the requested kind of query")
+        exit(1)
+    elif(RCODE == 5): # RCODE = 5 --> Refused
+        print("ERROR    Format error: Refused: the name server refuses to perform the requested operation for policy reasons")
+        exit(1)
+
+    # AA in the flags indicates whether the response is authoritative (1) or not (0)
+    AA = unpacked_list[1] & 0x0400 # and the 16-bit flag with 0000 0100 0000 0000 to get the AA bit
+    if (AA == 0):
+        AA = "not authoritative"
+    else:
+        AA = "authoritative"
+
+    
 
 # summarizes the query that is going to be sent
 def summarize(domain_name, ip_address, queryType):
