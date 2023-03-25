@@ -148,6 +148,19 @@ def resizeImg(img):
    
     return final_image
 
+"""
+Compression with a specified rate for mode 3
+"""
+def compression(img,rate):
+    size= (img.shape[0] * img.shape[1]) * rate //100
+    temp = img.flatten()
+    for i in range(size):
+        temp[(np.argpartition(np.abs(img), size))[i]]=0
+    
+    compressed_image = np.reshape(temp, img.shape)
+    np.savez_compressed('compression-'+rate, compressed_image )
+
+    return compressed_image
 
 
 """
@@ -199,16 +212,39 @@ def mode2(img):
 
     plot.show()
 
+def mode3(img):
+    FFT_image = FFT_2D(img)
+    rate = [0, 0.2,0.4,0.6,0.8,0.9]
+    #we need to perform compression
+    # we will compress with 6 different levels and plot them 
+    plot.title("0 compression")
+    plot.subplot(2,3,1)
+    plot.imshow(np.real(FFT_2D_inverse(compression(FFT_image.copy(), rate[0]))), cmap= 'gray')
 
-def mode3():
+    plot.title("20 percent compression")
+    plot.subplot(2,3,2)
+    plot.imshow(np.real(FFT_2D_inverse(compression(FFT_image.copy(), rate[1]))), cmap= 'gray')
+
+    plot.title("40 percent compression")
+    plot.subplot(2,3,3)
+    plot.imshow(np.real(FFT_2D_inverse(compression(FFT_image.copy(), rate[2]))), cmap= 'gray')
+
+    plot.title("60 percent compression")
+    plot.subplot(2,3,4)
+    plot.imshow(np.real(FFT_2D_inverse(compression(FFT_image.copy(), rate[3]))), cmap= 'gray')
+
+    plot.title("80 percent compression")
+    plot.subplot(2,3,5)
+    plot.imshow(np.real(FFT_2D_inverse(compression(FFT_image.copy(), rate[4]))), cmap= 'gray')
+
+    plot.title("90 percent compression")
+    plot.subplot(2,3,6)
+    plot.imshow(np.real(FFT_2D_inverse(compression(FFT_image.copy(), rate[5]))), cmap= 'gray')
+
+    plot.show()
+
+def mode4(img):
     pass
-def mode4():
-    pass
-
-
-
-
-
 
 
 
