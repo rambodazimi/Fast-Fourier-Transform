@@ -244,10 +244,89 @@ def mode3(img):
     plot.show()
 
 def mode4(img):
-    pass
+    testPlots = [
+        (2 ** 5, 2 ** 5),
+        (2 ** 6, 2 ** 6),
+        (2 ** 7, 2 ** 7),
+        (2 ** 8, 2 ** 8),
+        (2 ** 9, 2 ** 9),
+        (2 ** 10, 2 ** 10),
+    ]
+    #y axis for naive implementation
+    naive_time = []
+    #y axis for fast implementation
+    fast_time =[]
+    # x axis for both based on the test plots
+    size_list = [2 ** 5, 2 ** 6, 2 ** 7,2 ** 8, 2 ** 9, 2 ** 10,]
+    #size = 2**5
+    #standard daviation of naive implementation 
+    naive_std = []
+    #mean of naive implementation
+    naive_mean =[]
+    #variance of naive implementation
+    naive_variance=[]
+    #standard daviation of fast implementation 
+    fast_std = []
+    #mean of fast implementation
+    fast_mean =[]
+    #variance of fast implementation
+    fast_variance=[]
 
 
+    for element in testPlots:
+        #the range is 10 based on the assignment description
+        for test_time in range(10):
+            start_time = time.time()
+            DFT_naive_2D(img)
+            end_time = time.time()
+            duration = end_time-start_time
+            naive_time.append(duration)
 
+            start_time = time.time()
+            FFT_2D(img)
+            end_time = time.time()
+            duration = end_time-start_time
+            fast_time.append(duration)
+       
+        print("The size is :", element)
+       # size_list.append(size)
+       # size = size * 2
+        #calculate the mean 
+        naive_mean_var = np.mean(naive_time)
+        fast_mean_var = np.mean(fast_mean)
+        print("The mean of the DFT is:", naive_mean_var )
+        print("The mean of the FFT is:", fast_mean_var )
+        #add to the array 
+        naive_mean.append(naive_mean_var)
+        fast_mean.append(fast_mean_var)
+
+        #calculate the standard deviation 
+        naive_std_var = np.std(naive_time)
+        fast_std_var = np.std(fast_time)
+        print("The standard deviation of the DFT is:", naive_std_var )
+        print("The standard deviation of the FFT is:", fast_std_var )
+        #add to the array 
+        naive_std.append(naive_std_var)
+        fast_std.append(fast_std_var)
+
+        naive_variance_var = np.var(naive_time)
+        fast_variance_var = np.var(fast_time)
+        print("The variance of the DFT is:", naive_variance_var)
+        print("The variance of the FFT is:", fast_variance_var)
+        #add to the array 
+        naive_variance.append(naive_variance_var)
+        fast_variance.append(fast_variance_var)
+
+    plot.title("Runtime vs Size")
+    plot.xlabel("size")
+    plot.ylabel("runtime (sec)")
+    plot.errorbar(size_list, naive_mean, yerr=naive_std, linestyle='solid', color='yellow',label="slow")
+    plot.errorbar(size_list, fast_mean, yerr=fast_std, linestyle='solid', color='green',label="fast")
+    plot.show()
+
+"""
+Passing arguments
+"""
 def __main__ ():
     parse = argparse.ArgumentParser()
 
