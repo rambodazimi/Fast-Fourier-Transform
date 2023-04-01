@@ -222,7 +222,7 @@ def mode2(img):
 def mode3(img):
     print("Mode 3 is running...")
     FFT_image = FFT_2D(img)
-    rate = [0, 0.2, 0.4, 0.6, 0.8, 0.9]
+    rate = [0, 0.2, 0.4, 0.6, 0.8, 0.95]
     # we need to perform compression
     # we will compress with 6 different levels and plot them 
     plot.subplot(2,3,1)
@@ -247,25 +247,24 @@ def mode3(img):
 
     plot.subplot(2,3,6)
     plot.imshow(np.real(FFT_2D_inverse(compression(FFT_image.copy(), rate[5]))), cmap= 'gray')
-    plot.title("90%")
+    plot.title("95%")
     plot.show()
 
 def mode4(img):
     print("Mode 4 is running...")
-    testPlots = [
-        (2 ** 5, 2 ** 5),
-        (2 ** 6, 2 ** 6),
-        (2 ** 7, 2 ** 7),
-        (2 ** 8, 2 ** 8),
-        (2 ** 9, 2 ** 9),
-        (2 ** 10, 2 ** 10),
+    testPlots = [np.random.rand(2 ** 5, 2 ** 5),
+        np.random.rand(2 ** 6, 2 ** 6),
+        np.random.rand(2 ** 7, 2 ** 7),
+        np.random.rand(2 ** 8, 2 ** 8),
+        np.random.rand(2 ** 9, 2 ** 9),
+        np.random.rand(2 ** 10, 2 ** 10),
     ]
     #y axis for naive implementation
     naive_time = []
     #y axis for fast implementation
     fast_time =[]
     # x axis for both based on the test plots
-    size_list = [2 ** 5, 2 ** 6, 2 ** 7,2 ** 8, 2 ** 9, 2 ** 10,]
+    size_list = [2 ** 5, 2 ** 6, 2 ** 7,2 ** 8, 2 ** 9, 2 ** 10]
     #size = 2**5
     #standard daviation of naive implementation 
     naive_std = []
@@ -280,27 +279,30 @@ def mode4(img):
     #variance of fast implementation
     fast_variance=[]
 
+    #iterator for printing size
+    count = 0
     for element in testPlots:
         #the range is 10 based on the assignment description
-        for test_time in range(10):
+        for i in range(10):
             start_time = time.time()
-            DFT_naive_2D(img)
+            DFT_naive_2D(element)
             end_time = time.time()
             duration = end_time-start_time
             naive_time.append(duration)
 
             start_time = time.time()
-            FFT_2D(img)
+            FFT_2D(element)
             end_time = time.time()
             duration = end_time-start_time
             fast_time.append(duration)
        
-        print("The size is :", element)
+        print("The size is :", size_list[count] ,"by", size_list[count] )
+        count += 1
        # size_list.append(size)
        # size = size * 2
         #calculate the mean 
         naive_mean_var = np.mean(naive_time)
-        fast_mean_var = np.mean(fast_mean)
+        fast_mean_var = np.mean(fast_time)
         print("The mean of the DFT is:", naive_mean_var )
         print("The mean of the FFT is:", fast_mean_var )
         #add to the array 
