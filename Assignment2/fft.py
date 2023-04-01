@@ -1,7 +1,7 @@
-#fft application
-#Authors: 
-#Rambod Azimi 
-#Saghar Sahebi
+# fft application
+# Authors: 
+# Rambod Azimi 
+# Saghar Sahebi
 # ECSE 316 - Assignment 2 - Winter 2023
 # Group 39
 
@@ -13,54 +13,58 @@
 the syntax for running the app is: 
 python3 fft.py [-m mode] [-i image]
 """
+
 import numpy as np
 import matplotlib.pyplot as plot
 import matplotlib.colors as colors
 import time
-import sys 
+import sys
+import os
 import argparse
 import cv2
 
-#default values for argument 
+# default values for argument 
 default_mode = 1
 default_image = "moonlanding.png"
-
 
 """
 Error handlers
 """
 
 def invalid_type_error():
-    print("ERROR\n Invalid argument, check the arguments")
+    print("ERROR! Invalid argument. Please check the arguments")
     exit(1)
 
+def invalid_image_error():
+    print("ERROR! Invalid image. Please check the filename")
+    exit(1)
 
 """
 all definitions for different DFTs and FFTs
 """
-#https://pythonnumericalmethods.berkeley.edu/notebooks/chapter24.02-Discrete-Fourier-Transform.html
-#DFT of a 1D signal value x
+# https://pythonnumericalmethods.berkeley.edu/notebooks/chapter24.02-Discrete-Fourier-Transform.html
+# DFT of a 1D signal value x
 def DFT_naive(x):
-    #length of signal x
+    # length of signal x
     N = len(x)
-    #return evenly spaced values within a given interval
+    # return evenly spaced values within a given interval
     n = np.arange(N)
     k = n.reshape((N, 1))
     # DFT exponential part 
     e = np.exp((-1j * 2 * np.pi * k * n)/N)
-    #the dot product
+    # the dot product
     X = np.dot(e, x)
     return X
 
-#Inverse DFT of a 1D signal value x
+# Inverse DFT of a 1D signal value x
 def DFT_naive_inverse(x): 
     N = len(x)
-    #return evenly spaced values within a given interval
+    # return evenly spaced values within a given interval
     n = np.arange(N)
     k = n.reshape((N, 1))
     # DFT exponential part 
     e = np.exp((1j * 2 * np.pi * k * n)/N)
-    #the dot product
+    # the dot product
     X = (np.dot(e, x)/N)
     return X
 
@@ -76,22 +80,22 @@ def DFT_naive_2D(y):
     
     return X
 
-#https://pythonnumericalmethods.berkeley.edu/notebooks/chapter24.03-Fast-Fourier-Transform.html
-#1D FFT with an input signal x of a length of power of 2
+# https://pythonnumericalmethods.berkeley.edu/notebooks/chapter24.03-Fast-Fourier-Transform.html
+# 1D FFT with an input signal x of a length of power of 2
 def FFT(x):
     N = len(x)
-    n = np.arange(N)
-  #  k = n.reshape((N, 1))
     if N == 1:
         return x
-    else:
-         X_even = FFT(x[::2])
-         X_odd = FFT(x[1::2])
-         e = np.exp((-1j * 2 * np.pi * n)/N)
-         X = np.concatenate([X_even + e[:int(N/2)] * X_odd, X_even + e[int(N/2):] * X_odd])
-         return X
+    
+    n = np.arange(N) # n = evenly spaced values within the interval
+    X_even = FFT(x[0::2]) # recursively call FFT on the even inputs of x
+    X_odd = FFT(x[1::2]) # recursively call FFT on the odd inputs of x
 
-#1D inverse FFT with an input signal x of a length of power of 2
+    e = np.exp((-1j * 2 * np.pi * n)/N) # Math part
+    X = np.concatenate([X_even + e[:int(N/2)] * X_odd, X_even + e[int(N/2):] * X_odd])
+    return X
+
+# 1D inverse FFT with an input signal x of a length of power of 2
 def FFT_inverse(x):
     N = len(x)
     n = np.arange(N)
@@ -106,33 +110,37 @@ def FFT_inverse(x):
          return X
    
 # FFT of a 2D array
-def FFT_2D(y):
-    N = len(y)
-    M = len(y[0])
-    X = np.empty([N,M], dtype=complex)
-    for column in range(M):
-        X[:, column] = FFT(X[:, column])
-    for row in range(N):
-        X[row, :] = FFT(X[row, :])
-    
-    return X
+def FFT_2D(image: np.ndarray):
+
+    M = len(image)
+    N = len(image[0])
+    X = np.zeros([M,N], dtype='complex_')
+
+    for i, row in enumerate(image): # call the FFT on each row of image
+        X[i] = FFT(row)
+
+    X2 = np.zeros([N,M], dtype='complex_')
+    for i, col in enumerate(X.T): # call the FFT on each column of image
+        X2[i] = FFT(col)
+
+    return X2.T
 
 # inverse FFT of a 2D array
 def FFT_2D_inverse(y):
-    N = len(y)
-    M = len(y[0])
-    X = np.empty([N,M], dtype=complex)
-    for column in range(M):
-        X[:, column] = FFT_inverse(X[:, column])
-    for row in range(N):
-        X[row, :] = FFT_inverse(X[row, :])
-    
-    return X
+    M = len(y)
+    N = len(y[0])
+    X = np.empty([M,N], dtype='complex_')
+    for i, row in enumerate(y): # apply the FFT_inverse on each row of image y
+        X[i] = FFT_inverse(row)
 
+    X2 = np.empty([N,M], dtype='complex_')
+    for i, col in enumerate(X.T): # apply the FFT_inverse on each column of image y
+        X2[i] = FFT_inverse(col)
 
+    return X2.T
 
 """
-adjusting and resizing the input image if necessary(not power of two already)
+adjusting and resizing the input image if necessary (not power of two already)
 """
 def resizeImg(img):
     image = cv2.imread(img,cv2.IMREAD_GRAYSCALE)
@@ -151,99 +159,99 @@ def resizeImg(img):
 """
 Compression with a specified rate for mode 3
 """
-def compression(img,rate):
-    size= (img.shape[0] * img.shape[1]) * rate //100
+def compression(img, rate):
+    size = (img.shape[0] * img.shape[1]) * rate //100
     temp = img.flatten()
-    for i in range(size):
-        temp[(np.argpartition(np.abs(img), size))[i]]=0
+   # for i in range(int(size)):
+   #    temp[(np.argpartition(np.abs(img), size))[i]]=0
     
     compressed_image = np.reshape(temp, img.shape)
-    np.savez_compressed('compression-'+rate, compressed_image )
+    np.savez_compressed('compression-'+str(rate), compressed_image)
 
     return compressed_image
-
 
 """
 Different modes of the argument passed
 """
-
 def mode1(img):
-    FFT_image = np.abs(FFT_2D(img))
-    #one by two subplot of the original image 
-    plot.title("Original image --> before FFT")
+    FFT_image = np.abs(FFT_2D(img)) # calling FFT_2D function and save the result in FFT_image
+    
+    # one by two subplot of the original image 
     plot.subplot(1,2,1)
     plot.imshow(img, cmap= 'gray')
+    plot.title("(Before FFT)")
 
     #one by two subplot of the FFT image
-    plot.title("transformed image --> after FFT")
     plot.subplot(1,2,2)
-    plot.imshow(FFT_image, norm= colors.LogNorm())
+    plot.imshow(FFT_image, norm=colors.LogNorm())
+    plot.title("(After FFT)")
 
     plot.show()
 
 def mode2(img):
+    print("Mode 2 is running...")
     # the denoise factor, we chose to go with 0.4
     denoise_factor = 0.4
     FFT_image = FFT_2D(img)
-    #count the non zero for later when calculating the fraction 
+    # count the non zero for later when calculating the fraction 
     before_zero = np.count_nonzero(FFT_image)
-    
-    #setting the high frequencies to 0 
-    #width 
-    FFT_image[:, int(denoise_factor* FFT_image.shape[1]) : int(FFT_image.shape[1] * (1-denoise_factor))] = 0 
-    #height
-    FFT_image[int(denoise_factor* FFT_image.shape[0]) : int(FFT_image.shape[1] * (1-denoise_factor))] = 0
+    # setting the high frequencies to 0 
+    # width 
+    FFT_image[:, int(denoise_factor * FFT_image.shape[1]) : int(FFT_image.shape[1] * (1-denoise_factor))] = 0 
+    # height
+    FFT_image[int(denoise_factor * FFT_image.shape[0]) : int(FFT_image.shape[1] * (1-denoise_factor))] = 0
 
-    #count the new non zero 
+    # count the new non zero 
     after_zero = np.count_nonzero(FFT_image)
+
     inverse_FFT_image = FFT_2D_inverse(FFT_image).real
-    #as asked in the assignment pring the fraction and non-zeros 
+    # as asked in the assignment printing the fraction and non-zeros 
     fraction = (after_zero/before_zero)
-    print("the number of non-zeros are:", after_zero)
-    print("the fraction they represent of the original Fourier coefficients:", fraction)
-    #before
-    plot.title("original image --> before denoising")
+    print(f"The number of non-zeros are: {after_zero}")
+    print(f"The fraction they represent of the original Fourier coefficients: {fraction}")
+    # before
     plot.subplot(1,2,1)
     plot.imshow(img, cmap= 'gray')
+    plot.title("(Before denoising)")
     # after
-    plot.title("transformed image --> after denoising")
     plot.subplot(1,2,2)
     plot.imshow(inverse_FFT_image, cmap= 'gray')
-
+    plot.title("(After denoising)")
     plot.show()
 
 def mode3(img):
+    print("Mode 3 is running...")
     FFT_image = FFT_2D(img)
-    rate = [0, 0.2,0.4,0.6,0.8,0.9]
-    #we need to perform compression
+    rate = [0, 0.2, 0.4, 0.6, 0.8, 0.9]
+    # we need to perform compression
     # we will compress with 6 different levels and plot them 
-    plot.title("0 compression")
     plot.subplot(2,3,1)
     plot.imshow(np.real(FFT_2D_inverse(compression(FFT_image.copy(), rate[0]))), cmap= 'gray')
+    plot.title("0%")
 
-    plot.title("20 percent compression")
     plot.subplot(2,3,2)
     plot.imshow(np.real(FFT_2D_inverse(compression(FFT_image.copy(), rate[1]))), cmap= 'gray')
+    plot.title("20%")
 
-    plot.title("40 percent compression")
     plot.subplot(2,3,3)
     plot.imshow(np.real(FFT_2D_inverse(compression(FFT_image.copy(), rate[2]))), cmap= 'gray')
+    plot.title("40%")
 
-    plot.title("60 percent compression")
     plot.subplot(2,3,4)
     plot.imshow(np.real(FFT_2D_inverse(compression(FFT_image.copy(), rate[3]))), cmap= 'gray')
+    plot.title("60%")
 
-    plot.title("80 percent compression")
     plot.subplot(2,3,5)
     plot.imshow(np.real(FFT_2D_inverse(compression(FFT_image.copy(), rate[4]))), cmap= 'gray')
+    plot.title("80%")
 
-    plot.title("90 percent compression")
     plot.subplot(2,3,6)
     plot.imshow(np.real(FFT_2D_inverse(compression(FFT_image.copy(), rate[5]))), cmap= 'gray')
-
+    plot.title("90%")
     plot.show()
 
 def mode4(img):
+    print("Mode 4 is running...")
     testPlots = [
         (2 ** 5, 2 ** 5),
         (2 ** 6, 2 ** 6),
@@ -271,7 +279,6 @@ def mode4(img):
     fast_mean =[]
     #variance of fast implementation
     fast_variance=[]
-
 
     for element in testPlots:
         #the range is 10 based on the assignment description
@@ -328,23 +335,37 @@ def mode4(img):
 Passing arguments
 """
 def __main__ ():
-    parse = argparse.ArgumentParser()
 
-    parse.add_argument("-m", dest="mode" ,type= int, default= default_mode, help= "the value must be between 1 and 4")
-    parse.add_argument("-i", dest="image" ,type=str, default=default_image, help="the file needs to be an image")
+    parse = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
+    # mode with the default value of 1
+    parse.add_argument("-m", dest="mode" ,type= int, default= default_mode, help= "The mode can be any number from 1 to 4")
+
+    # image with the default value of moonlanding.png
+    parse.add_argument("-i", dest="image" ,type=str, default=default_image, help="The image should be the filename of the image we wish to take the DFT of")
+
+    # put all the parser arguments into a variable
     arguments = parse.parse_args()
+
+    # store the mode and image arguments into variables
     mode = arguments.mode
     image = arguments.image
 
-    if (mode == 1):
+    if not (os.path.isfile(image)): # if the image does not exist in the current directory, print an error message
+        invalid_image_error()
+
+    if (mode == 1): # (Default) image is converted into its FFT form and displayed
+        print("Mode 1 is running...")
         mode1(resizeImg(image))
-    elif (mode == 2):
+    elif (mode == 2): # image is denoised by applying an FFT, truncating high frequencies and then displayed
         mode2(resizeImg(image))
-    elif (mode == 3):
+    elif (mode == 3): # for compressing and saving the image
         mode3(resizeImg(image))
-    elif (mode == 4):
+    elif (mode == 4): # for plotting the runtime graphs for the report
         mode4(resizeImg(image))
     else:
-        invalid_type_error()
-      
+        invalid_type_error() # if the mode is anything other than [1,4], print the error message
+
+if __name__ == "__main__":
+    print("Starting the software...")
+    __main__()
